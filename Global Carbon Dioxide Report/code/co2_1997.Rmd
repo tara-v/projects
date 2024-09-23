@@ -1,0 +1,637 @@
+---
+title: "Global CO\textsubscript{2} Emissions in 1997"
+short: "What Keeling missed all these years"
+journal: "AER" # AER, AEJ, PP, JEL
+month: "`r format(Sys.Date(), '%m')`"
+year: "`r format(Sys.Date(), '%Y')`"
+author:
+  - name: James Venter
+    firstname: James
+    surname: Venter
+    email: james.venter@ischool.berkeley.edu
+    affiliation: MIDS
+  - name: Ryan Brown
+    firstname: Ryan
+    surname: Brown
+    email: rbrown55@ischool.berkeley.edu
+    affiliation: MIDS
+  - name: Tara Verma
+    firstname: Tara
+    surname: Verma
+    email: tara@ischool.berkeley.edu
+    affiliation: MIDS
+  - name: Zachary Nash
+    firstname: Zachary
+    surname: Nash
+    email: zachary.nash@ischool.berkeley.edu
+    affiliation: MIDS
+header-includes: 
+  - '\usepackage{graphicx}'
+  - '\usepackage{booktabs}'
+  - '\usepackage{subcaption}'
+  - '\usepackage[margin=0.5in]{geometry}'
+  - '\usepackage{float}'
+output: 
+  rticles::aea_article:
+    citation_package: "natbib"
+    keep_tex: False
+biblio-style: aea
+bibliography: vignette.bib
+---
+
+
+```{r setup, include=F}
+rm(list = ls())
+if(!"fable"%in%rownames(installed.packages())) {install.packages("fable")}
+library(fable)
+
+if(!"feasts"%in%rownames(installed.packages())) {install.packages("feasts")}
+library(feasts)
+
+if(!"forecast"%in%rownames(installed.packages())) {install.packages("forecast")}
+library(forecast)
+
+if(!"tsibble"%in%rownames(installed.packages())) {install.packages("tsibble")}
+library(tsibble)
+
+if(!"tidyverse"%in%rownames(installed.packages())) {install.packages("tidyverse")}
+library(tidyverse)
+
+if(!"dplyr"%in%rownames(installed.packages())) {install.packages("dplyr")}
+library(dplyr)
+
+if(!"ggplot2"%in%rownames(installed.packages())) {install.packages("ggplot2")}
+library(ggplot2)
+
+if(!"ggrepel"%in%rownames(installed.packages())) {install.packages("ggrepel")}
+library(ggrepel)
+
+if(!"modelsummary"%in%rownames(installed.packages())) {install.packages("modelsummary")}
+library(modelsummary)
+
+if(!"patchwork"%in%rownames(installed.packages())) {install.packages("patchwork")}
+library(patchwork)
+
+if(!"latex2exp"%in%rownames(installed.packages())) {install.packages("latex2exp")}
+library(latex2exp)
+
+theme_set(theme_minimal())
+knitr::opts_chunk$set(dpi=200, include = F, echo = F, message = F, warning = F)
+
+source("Functions.R")
+source("Constants.R")
+source("Pipeline.R")
+```
+
+# Introduction 
+## Carbon Emissions and the Keeling Curve
+In his 1960 report, Charles Keeling found that atmospheric carbon dioxide (CO\textsubscript{2}) is far more variable than other atmospheric gasses, hypothesizing the variation was caused by  naturally-occurring and manmade environmental factors [@Keeling1960]. Since then, Keeling has spearheaded efforts towards monitoring CO\textsubscript{2}, and chose the Mauna Loa observatory as a representative sample of “baseline” air to proxy global levels as the site is 13,679 feet above sea level and surrounded by lava as opposed to vegetation [@MeasuringCO2]. The seasonal and overarching trends in this data are now widely known as the Keeling Curve, which is the primary subject of our investigation.
+
+Over the last 37 years, the Keeling curve shows a steady upward trend in global CO\textsubscript{2} levels, and our team aims to investigate this phenomenon further. While we do not have a conclusive understanding of the long-term effects of elevated CO\textsubscript{2} levels, there is a growing body of research on the subject that provides initial insights on the impacts to both the natural world and human health. Elevated atmospheric CO\textsubscript{2} impacts decompose ecosystems and soil feedback processes, which in the long term may affect food systems [@Jones]. Recent changes in CO\textsubscript{2} levels are largely attributed to fossil fuel combustion, comparable in magnitude to those of inter-glacial periods, and occur far more rapidly. Many researchers believe increased atmospheric concentrations of greenhouse gasses, like CO\textsubscript{2}, will contribute to a rise in global temperatures due to the greenhouse effect. The 1992 best estimate stated that doubling the atmospheric carbon dioxide will lead to a 2.5ºC increase in global temperatures which will impact natural and agricultural ecosystems [@Vitousek]. The 1986 Lake Nyos disaster in Cameroon provides initial insights into the medical effects of large-scale CO\textsubscript{2} emissions. When volcanic crater lake Lake Nyos underwent a substantial release of CO\textsubscript{2} gas in 1986, approximately 1700 people died; many of the survivors showed signs of asphyxiant gas exposure and coma states from atmospheric CO\textsubscript{2}[@Nyos].
+
+As such, we are interested in exploring atmospheric CO\textsubscript{2} levels from 1960 to 1997 to contribute an assessment of recent trends to the literature. Additionally, we built models to illustrate what future levels of atmospheric CO\textsubscript{2} will be if we continue with this trajectory.
+
+
+# Measurement and Data 
+## Measuring Atmospheric Carbon Dioxide
+The dataset we are using is the average monthly readings of CO\textsubscript{2} levels collected at the Mauna Loa Observatory in Hawaii, from January 1959 through December 1997. The CO\textsubscript{2} level is reported in parts per million (ppm), which refers to the number of CO\textsubscript{2} molecules in every million molecules of air after removing the water vapor from the sample [@MeasuringCO2].
+
+## Historical Trends in Atmospheric Carbon
+
+```{r initial plot}
+co2_tsib<-as_tsibble(co2) %>%
+  mutate(diff = difference(value), diff_perc = (diff / lag(value, 1)) * 100)
+
+base.aes <- list(x = 'index', y = 'value')
+x.value.aes <- list(x = 'value')
+diff.aes <- list(x = 'index', y = 'diff')
+diff.x.value.aes <- list(x = 'diff')
+
+labs.template <- create.labels.template(x.fmt=mo_yr, y.fmt=co2_ppm)
+
+labs.updates <- list(subtitle = 'The "Keeling Curve"')
+gg.labs <- update.template(labs.template, labs.updates)
+inputs.list <- list(aes.params = line.aes.params)
+keeling.curve <- create.plot(co2_tsib, base.aes, 'line', gg.labs, inputs.list)
+
+labs.updates <- list(y = "# months", x = co2_ppm)
+gg.labs <- update.template(labs.template, labs.updates)
+inputs.list <- list(aes.params = hist.aes.params, stat.params = list(binwidth = 5))
+co2.histogram <- create.plot(co2_tsib, x.value.aes, 'hist', gg.labs, inputs.list)
+
+pdf("./figures97/co2_time_series.pdf")
+keeling.curve
+dev.off()
+
+pdf("./figures97/co2_histogram.pdf")
+co2.histogram
+dev.off()
+
+seasonal.plot <- co2_tsib %>%
+          gg_season(value, labels = 'right', labels_repel = TRUE) +
+            labs(
+            title = TeX(r'($CO_2$ Concentration Seasonality)'),
+            x = '',
+            y = TeX(r'($CO_2$ parts per million)')) + base.theme
+
+pdf("./figures97/co2_seasonal.pdf")
+seasonal.plot
+dev.off()
+```
+
+```{r yearly difference plots}
+co2_tsib_yearly <- agg_yearly(co2_tsib)
+
+labs.updates <- list(title = yearly_mean_co2_diff, x = '')
+gg.labs <- update.template(labs.template, labs.updates)
+inputs.list <- list(aes.params = line.aes.params)
+yearly.co2.diff.plot <- create.plot(co2_tsib_yearly, diff.aes, 'line', gg.labs, inputs.list)
+
+pdf("./figures97/yearly_diff.pdf")
+yearly.co2.diff.plot
+dev.off()
+```
+
+\autoref{fig:seasonality} contains the monthly average CO\textsubscript{2} levels by year. The series has a persistent upward trend with the mean increasing from approximately 315ppm in 1960 to 360ppm in 1997. We also observe consistent seasonality across years, where CO\textsubscript{2} levels peak between April and June and hit their lowest point between September and November. This is consistent with vegetation cycles and suggest that any models we build for this series should include a seasonal component. Additionally, the variance, or magnitude of seasonal changes, seems relatively constant throughout the series. Finally, we observe in \autoref{fig:yearly_diff} that the increase of yearly average CO\textsubscript{2} levels is consistent throughout the series, albeit noisy.
+
+\begin{figure}
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{./figures97/co2_seasonal.pdf}
+  \caption{Seasonality and trend in CO\textsubscript{2}}
+  \label{fig:seasonality}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{./figures97/yearly_diff.pdf}
+  \caption{Change in avg. yearly CO\textsubscript{2}}
+  \label{fig:yearly_diff}
+\end{subfigure}
+\caption{Seasonality and change in yearly average CO\textsubscript{2}}
+\begin{figurenotes}
+CO\textsubscript{2} levels peak between Apr.-Jun. and bottoms out between Sep.-Nov. each year. The percentage increase in average yearly CO\textsubscript{2} levels is relatively stable.
+\end{figurenotes}
+\label{fig:initial_plots}
+\end{figure}
+
+
+# Models and Forecasts
+
+## Linear Time Trend Model
+
+To begin, we fit a model of the form: 
+
+\begin{equation}
+\label{eq:one}
+\text{CO}_{2t} = \beta_{0} + \beta_{1} trend_{t} + \epsilon_{t}
+\end{equation}
+
+The residuals exhibit a non-constant mean and are not normally distributed around zero, as seen in the time series and histogram plots in \autoref{fig:linear_resid_plot}. Additionally, we observe a strong trend in the seasonal variation in the ACF plot in \autoref{fig:linear_resid_acf} indicating that the residuals are not stationary.
+
+```{r fit linear model and plot residuals}
+fit_linear <- co2_tsib %>%
+                model(trend_model = TSLM(value ~ trend()))
+
+linear_resid_plots <- gg_tsresiduals(fit_linear) +
+  labs(title = 'Time series, ACF and histogram plots for linear time trend model residuals')
+
+linear_resid_plots[[1]] <- linear_resid_plots[[1]] + base.theme + labs(y = 'Residual value', x = '')
+linear_resid_plots[[2]] <- linear_resid_plots[[2]] + base.theme + labs(y = 'ACF value', x = 'Lag - Month')
+linear_resid_plots[[3]] <- linear_resid_plots[[3]] + base.theme + labs(y = 'Count', x = 'Residual value') +
+  scale_x_continuous(breaks = seq(-5, 5, 1), labels = seq(-5, 5, 1))
+linear_resid_plots[[3]]$layers[[1]]$aes_params <- hist.aes.params
+linear_resid_plots[[3]]$layers <- linear_resid_plots[[3]]$layers[1]
+
+pdf("./figures97/linear_resid_plot.pdf")
+linear_resid_plots[[1]] +
+  labs(title = '')
+dev.off()
+
+pdf("./figures97/linear_resid_acf.pdf")
+linear_resid_plots[[2]] +
+  labs(title = '')
+dev.off()
+```
+
+
+\begin{figure}
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/linear_resid_plot.pdf}
+  \caption{Time series}
+  \label{fig:linear_resid_plot}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/linear_resid_acf.pdf}
+  \caption{ACF}
+  \label{fig:linear_resid_acf}
+\end{subfigure}
+\caption{Time series and ACF plots of linear time trend model residuals}
+\begin{figurenotes}
+  The residuals exhibit a non-constant mean and are not normally distributed around zero, indicating non-stationarity.
+\end{figurenotes}
+\label{fig:linear_resid}
+\end{figure}
+
+
+\newpage
+
+We attempt to address the issue of stationarity by adding a quadratic term to the model. By examining this model's residual plots in \autoref{fig:quad_resid}, we observe that the mean is now much closer to zero and appears to be consistent over time. The ACF plot still shows a seasonal pattern, which we will address by including a seasonal component in our model. Finally, the variance appears to be stable over time, indicating that there is no need to apply a log transformation to the series.
+
+```{r fit quadratic model and plot residuals}
+fit_quad <- co2_tsib %>%
+              model(trend_model = TSLM(value ~ trend() + I(trend()^2)))
+
+quad_resid_plots <- gg_tsresiduals(fit_quad) +
+  labs(title = 'Time series, ACF and histogram plots for quadratic time trend model residuals')
+
+quad_resid_plots[[1]] <- quad_resid_plots[[1]] + base.theme + labs(y = 'Residual value', x = '')
+quad_resid_plots[[2]] <- quad_resid_plots[[2]] + base.theme + labs(y = 'ACF value', x = 'Lag - Month')
+quad_resid_plots[[3]] <- quad_resid_plots[[3]] + base.theme + labs(y = 'Count', x = 'Residual value') +
+  scale_x_continuous(breaks = seq(-5, 5, 1), labels = seq(-5, 5, 1))
+quad_resid_plots[[3]]$layers[[1]]$aes_params <- hist.aes.params
+quad_resid_plots[[3]]$layers <- quad_resid_plots[[3]]$layers[1]
+
+pdf("./figures97/quad_resid_acf.pdf")
+quad_resid_plots[[2]] +
+  labs(title = '')
+dev.off()
+
+pdf("./figures97/quad_resid_hist.pdf")
+quad_resid_plots[[3]] +
+  labs(title = '')
+dev.off()
+```
+
+
+\begin{figure}
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[keepaspectratio, height=6cm]{./figures97/quad_resid_acf.pdf}
+  \caption{ACF}
+  \label{fig:quad_resid_acf}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[keepaspectratio, height=6cm]{./figures97/quad_resid_hist.pdf}
+  \caption{Histogram}
+  \label{fig:quad_resid_hist}
+\end{subfigure}
+\caption{ACF and histogram of quadratic time trend model residuals}
+\begin{figurenotes}
+  The quadratic term corrects the non-constant mean in the residuals; seasonality still needs to be addressed.
+\end{figurenotes}
+\label{fig:quad_resid}
+\end{figure}
+
+\newpage
+Our final model, used for forecasting, is of the form:
+
+\begin{equation}
+\label{eq:two}
+\text{CO}_{2t} = \beta_{0} + \beta_{1} trend_{t} + \beta_{2} trend^{2}_{t} + \beta_{3} month_{2} + ... + \beta_{14} month_{12} + \epsilon_{t}
+\end{equation}
+
+\autoref{fig:time_trend_forecasts} contains the forecasts from our final time trend model. Although the forecasts appear to have a very narrow confidence interval, the forecast is likely understating the true confidence. The model residuals contain autocorrelation, seen in \autoref{fig:final_trend_acf}, indicating that the residuals are not stationary and therefore violate the white noise assumption necessary for us to have confidence in the forecast.
+
+
+```{r fit quadratic seasonal model and generate forecast through 2020}
+fit_quad_season <- co2_tsib %>%
+                    model(trend_model = TSLM(value ~ trend() + I(trend()^2) + season()))
+
+latest_month <- co2_tsib %>% pull(index) %>% max()
+num_preds <- make_yearmonth(2020,12) - latest_month
+pred <- new_data(co2_tsib, n=num_preds)
+
+time_trend_forecasts <- fit_quad_season %>%
+  forecast(new_data = pred) %>%
+  autoplot(co2_tsib) +
+    base.theme +
+    labs(title = 'Forecasts of quadratic time trend model with seasonal component',
+         y = co2_ppm, x = 'Year - Month')
+
+pdf("./figures97/time_trend_forecasts.pdf")
+time_trend_forecasts + labs(title = '')
+dev.off()
+```
+
+
+```{r seasonal quadratic time trend residual plots}
+seas_quad_resid_plots <- gg_tsresiduals(fit_quad_season) +
+  labs(title = 'Time series, ACF and histogram plots for seasonal quadratic time trend model residuals')
+
+seas_quad_resid_plots[[1]] <- seas_quad_resid_plots[[1]] + base.theme + labs(y = 'Residual value', x = '')
+seas_quad_resid_plots[[2]] <- seas_quad_resid_plots[[2]] + base.theme + labs(y = 'ACF value', x = 'Lag - Month')
+seas_quad_resid_plots[[3]] <- seas_quad_resid_plots[[3]] + base.theme + labs(y = 'Count', x = 'Residual value') +
+  scale_x_continuous(breaks = seq(-5, 5, 1), labels = seq(-5, 5, 1))
+seas_quad_resid_plots[[3]]$layers[[1]]$aes_params <- hist.aes.params
+seas_quad_resid_plots[[3]]$layers <- seas_quad_resid_plots[[3]]$layers[1]
+
+pdf("./figures97/final_trend_acf.pdf")
+seas_quad_resid_plots[[2]] + labs(title = '')
+dev.off()
+```
+
+
+\begin{figure}
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/time_trend_forecasts.pdf}
+  \caption{Forecasts through 2020}
+  \label{fig:time_trend_forecasts}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/final_trend_acf.pdf}
+  \caption{ACF plot}
+  \label{fig:final_trend_acf}
+\end{subfigure}
+\begin{figurenotes}
+  The forecasts continues the upward trend, capturing the seasonality. Confidence is likely overstated due to autocorrelation in the residuals.
+\end{figurenotes}
+\caption{ACF and forecast plots}
+\label{fig:final_trend_plots}
+\end{figure}
+
+A table containing the coefficients for the three time trend models can be found in the appendix.
+
+## ARIMA Model and Forecasts 
+
+```{r kpss tests}
+kpss_d0 <- co2_tsib %>% 
+features(value, unitroot_kpss) %>% 
+  round(2)
+kpss_d1 <- co2_tsib %>% 
+features(difference(value), unitroot_kpss) %>% 
+  round(2)
+```
+
+```{r baseline arima}
+n_lags <- 12
+
+base_arima_fit <- co2_tsib %>%
+  model(ts_model=fable::ARIMA(value~0+pdq(0,1,0)+PDQ(0,0:1,0),ic="aicc",greedy=F,
+                              stepwise=F))
+
+n_coefs <- base_arima_fit %>% coef() %>% nrow()
+base_arima_fit_AICc <- get_gof(base_arima_fit) %>% pull(AICc) %>% unname() %>% round(2)
+# With histogram of residuals
+base_arima_resid_plots <- gg_tsresiduals(base_arima_fit) +
+  labs(title = 'Time series, ACF and histogram plots for ARIMA(0,1,0)(0,1,0) model residuals')
+
+base_arima_resid_plots[[1]] <- base_arima_resid_plots[[1]] + base.theme + labs(y = 'Residual value', x = '')
+base_arima_resid_plots[[2]] <- base_arima_resid_plots[[2]] + base.theme + labs(y = 'ACF value', x = 'Lag - Month')
+base_arima_resid_plots[[3]] <- base_arima_resid_plots[[3]] + base.theme + labs(y = 'Count', x = 'Residual value')
+base_arima_resid_plots[[3]]$layers[[1]]$aes_params <- hist.aes.params
+base_arima_resid_plots[[3]]$layers <- base_arima_resid_plots[[3]]$layers[1]
+
+# With PACF of residuals
+base_arima_resid_plots <- base_arima_fit %>% 
+  augment() %>%
+  select(c(index, .resid)) %>%
+  gg_tsdisplay(plot_type='partial') +
+    labs(title = 'Time series, ACF and histogram plots for ARIMA(0,1,0)(0,1,0) model residuals')
+
+base_arima_resid_plots[[1]] <- base_arima_resid_plots[[1]] + base.theme + labs(y = 'Residual value', x = '')
+base_arima_resid_plots[[2]] <- base_arima_resid_plots[[2]] + base.theme + labs(y = 'ACF value', x = 'Lag - Month')
+base_arima_resid_plots[[3]] <- base_arima_resid_plots[[3]] + base.theme + labs(y = 'PACF value', x = 'Lag - Month')
+base_arima_resid_pacf <- base_arima_resid_plots[[3]]
+
+pdf("./figures97/base_arima_resid_pacf.pdf")
+base_arima_resid_pacf + labs(title = '')
+dev.off()
+
+pdf("./figures97/base_arima_resid_time_series.pdf")
+base_arima_resid_plots[[1]] + labs(title = '')
+dev.off()
+
+base_ljung_box_test <- augment(base_arima_fit) %>%
+  select(c(index, .innov)) %>% 
+  features(.innov, ljung_box, lag = n_lags, dof = n_lags-n_coefs) %>% 
+  round(2)
+```
+
+Next, we will fit an ARIMA model. A KPSS test of the series is not statistically significant with a p-value of `r kpss_d0$kpss_pvalue`, confirming that it is non-stationary. A KPSS test of the first difference of the series yields a p-value of `r kpss_d1$kpss_pvalue`, confirming that we will only need to take one difference to make it stationary.
+We will begin by fitting an ARIMA model using the ARIMA() function to estimate the model with lowest corrected AIC. We will use the form $ARIMA(0,1,0)$ to address the non-stationarity in the series and let the ARIMA function determine if a seasonal difference results in a lower corrected AIC. The function selected a model with the form $ARIMA(0,1,0)(0,1,0)[12]$. This model fits the data fairly well and has an AICc value of `r base_arima_fit_AICc`. However, a Ljung-Box test of the residuals is not statistically significant (p-value of `r base_ljung_box_test$lb_pvalue`), indicating that autocorrelation is still present in the residuals. The PACF plot in \autoref{fig:base_arima_resid_pacf} shows several lags that are statistically significant. It does not display a sharp drop off that would be indicative of an AR process, so we conclude that the model is missing an MA component.
+
+\begin{figure}
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/base_arima_resid_pacf.pdf}
+  \caption{PACF of ARIMA(0,1,0)(0,1,0)[12] model residuals.\label{fig:base_arima_resid_pacf}}
+  \begin{figurenotes}
+    Several lags in the PACF are statistically significant. The shape of the PACF indicates the model is missing an MA component.
+  \end{figurenotes}
+\end{figure}
+
+```{r adding ma terms}
+updated_arima_fit <- co2_tsib %>%
+  model(ts_model=fable::ARIMA(value~0+pdq(0,1,0:10)+PDQ(0,0:1,0:10),ic="aicc",greedy=F,
+                              stepwise=F))
+
+n_coefs <- updated_arima_fit %>% coef() %>% nrow()
+updated_arima_fit_AICc <- get_gof(updated_arima_fit) %>% pull(AICc) %>% unname() %>% round(2)
+# With histogram of residuals
+updated_arima_resid_plots <- gg_tsresiduals(updated_arima_fit) +
+  labs(title = 'Time series, ACF and histogram plots for ARIMA(0,1,0)(0,1,0) model residuals')
+
+updated_arima_resid_plots[[1]] <- updated_arima_resid_plots[[1]] + base.theme + labs(y = 'Residual value', x = '')
+updated_arima_resid_plots[[2]] <- updated_arima_resid_plots[[2]] + base.theme + labs(y = 'ACF value', x = 'Lag - Month')
+updated_arima_resid_plots[[3]] <- updated_arima_resid_plots[[3]] + base.theme + labs(y = 'Count', x = 'Residual value')
+updated_arima_resid_plots[[3]]$layers[[1]]$aes_params <- hist.aes.params
+updated_arima_resid_plots[[3]]$layers <- updated_arima_resid_plots[[3]]$layers[1]
+updated_arima_resid_hist <- updated_arima_resid_plots[[3]]
+
+# With PACF of residuals
+updated_arima_resid_plots <- updated_arima_fit %>% 
+  augment() %>%
+  select(c(index, .resid)) %>%
+  gg_tsdisplay(plot_type='partial') +
+    labs(title = 'Time series, ACF and histogram plots for ARIMA(0,1,0)(0,1,0) model residuals')
+
+updated_arima_resid_plots[[1]] <- updated_arima_resid_plots[[1]] + base.theme + labs(y = 'Residual value', x = '')
+updated_arima_resid_plots[[2]] <- updated_arima_resid_plots[[2]] + base.theme + labs(y = 'ACF value', x = 'Lag - Month')
+updated_arima_resid_plots[[3]] <- updated_arima_resid_plots[[3]] + base.theme + labs(y = 'PACF value', x = 'Lag - Month')
+updated_arima_resid_acf <- updated_arima_resid_plots[[2]]
+updated_arima_resid_pacf <- updated_arima_resid_plots[[3]]
+
+pdf("./figures97/updated_arima_resid_acf.pdf")
+updated_arima_resid_acf + labs(title = '')
+dev.off()
+
+pdf("./figures97/updated_arima_resid_pacf.pdf")
+updated_arima_resid_pacf + labs(title = '')
+dev.off()
+
+pdf("./figures97/updated_arima_resid_hist.pdf")
+updated_arima_resid_hist + labs(title = '')
+dev.off()
+
+updated_ljung_box_test <- augment(updated_arima_fit) %>%
+  select(c(index, .innov)) %>% 
+  features(.innov, ljung_box, lag = n_lags, dof = n_lags-n_coefs) %>% 
+  round(2)
+```
+
+\newpage
+
+We then fit another ARIMA model using the ARIMA() function, again selecting the model with lowest corrected AIC. We kept the difference terms from the prior model fixed and let the ARIMA function select the MA and seasonal MA components with the lowest corrected AIC. The function selected a model with the form $ARIMA(0,1,3)(0,1,1)[12]$. This model has an AICc value of `r updated_arima_fit_AICc`, and the Ljung-Box test of the residuals indicates that they do not have any autocorrelation, with a statistic of `r updated_ljung_box_test$lb_stat` and associated p-value of `r updated_ljung_box_test$lb_pvalue`. We examined the residuals to ensure the model's adequacy by examining the ACF and PACF plot of the residuals in \autoref{fig:arima_acf_pacf} and the histogram of the residuals in \autoref{fig:arima_resid_hist}. The ACF and PACF plots show no indication of non-stationarity and the histogram shows that the residuals are relatively normally distributed with mean zero, indicating that they satisfy the necessary white noise process assumptions.
+
+\begin{figure}
+\begin{subfigure}{.33\textwidth}
+  \centering
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/updated_arima_resid_acf.pdf}
+  \caption{ACF}
+  \label{fig:arima_acf}
+\end{subfigure}%
+\begin{subfigure}{.33\textwidth}
+  \centering
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/updated_arima_resid_pacf.pdf}
+  \caption{PACF}
+  \label{fig:arima_pacf}
+\end{subfigure}
+\begin{subfigure}{.33\textwidth}
+  \centering
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/updated_arima_resid_hist.pdf}
+  \caption{Histogram}
+  \label{fig:arima_resid_hist}
+\end{subfigure}
+\caption{Residual diagnostic plots of ARIMA(0,1,3)(0,1,1)[12] model}
+\begin{figurenotes}
+  Only one of the 24 lags is significant in each of the plots. This is within the expected number at a 95\% confidence level, indicating that they are stationary. The residuals are normally distributed with mean 0, indicating that the white noise assumptions are satisfied.
+\end{figurenotes}
+\label{fig:arima_acf_pacf_hist}
+\end{figure}
+
+
+\newpage
+```{r forecast through 2022}
+num_preds2 <- make_yearmonth(2022,12) - latest_month
+pred2 <- new_data(co2_tsib, n=num_preds2)
+
+updated_arima_forecasts2022 <- updated_arima_fit %>%
+  forecast(new_data = pred2) %>%
+  autoplot(co2_tsib) +
+  labs(title = TeX(r'($CO_2$ ppm Forecast to 2022 using ARIMA Model)'), y = co2_ppm, x = '') +
+  base.theme
+
+pdf("./figures97/updated_arima_forecasts2022.pdf")
+updated_arima_forecasts2022 + labs(title = '')
+dev.off()
+```
+
+We forecast atmospheric CO\textsubscript{2} concentration levels to 2022 using the $ARIMA(0,1,3)(0,1,1)[12]$ model, shown in \autoref{fig:arima_forecast2022}. Our model captures the trend and seasonal patterns in the CO\textsubscript{2} data, providing a reasonable representation of future CO\textsubscript{2} levels. This model assumes historical patterns will continue, but significant changes in global carbon dynamics could affect future predictions. The forecast indicates a continuing increase in CO\textsubscript{2} levels, with clear seasonal fluctuations and widening prediction intervals over time. Our model captures the trend and seasonal patterns in the CO\textsubscript{2} data, providing a reasonable representation of future CO\textsubscript{2} levels. This model assumes historical patterns will continue, but significant changes in global carbon dynamics could affect future predictions.
+
+\begin{figure}
+  \noindent\includegraphics[height=7cm,keepaspectratio]{./figures97/updated_arima_forecasts2022.pdf}
+  \caption{Forecasts through 2022.\label{fig:arima_forecast2022}}
+  \begin{figurenotes}
+    The model captures the trend and seasonal patterns, providing a reasonable representation of future CO\textsubscript{2} levels so long as the trend remains stable.
+  \end{figurenotes}
+\end{figure}
+
+```{r forecast through 2100}
+num_preds3 <- make_yearmonth(2100,12) - latest_month
+pred3 <- new_data(co2_tsib, n=num_preds3)
+
+updated_arima_forecasts2100 <- updated_arima_fit %>%
+  forecast(new_data = pred3)
+
+forecasts2100_plot <- updated_arima_forecasts2100 %>%
+  autoplot(co2_tsib) +
+  geom_hline(yintercept = 420, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = 500, linetype = "dashed", color = "blue") +
+  annotate("text", x = as.Date("2050-01-01"), y = 425, label = "420 ppm", color = "red") +
+  annotate("text", x = as.Date("2050-01-01"), y = 505, label = "500 ppm", color = "blue") +
+  labs(title = TeX(r'($CO_2$ Forecast to 2100 using ARIMA Model)'),
+       y = co2_ppm,
+       x = NULL)
+
+pdf("./figures97/updated_arima_forecasts2100.pdf")
+forecasts2100_plot + labs(title = '')
+dev.off()
+
+reach_420 <- updated_arima_forecasts2100 %>% 
+  filter(.mean >= 420)
+reach_420 <- reach_420 %>% 
+  slice(c(1, nrow(reach_420)))
+
+first_reach_420 <- reach_420 %>% filter(row_number() == 1) %>% pull(index) %>% format("%B %Y")
+final_reach_420 <- reach_420 %>% filter(row_number() == 2) %>% pull(index) %>% format("%B %Y")
+
+reach_500 <- updated_arima_forecasts2100 %>% 
+  filter(.mean >= 500)
+reach_500 <- reach_500 %>% 
+  slice(c(1, nrow(reach_500)))
+
+first_reach_500 <- reach_500 %>% filter(row_number() == 1) %>% pull(index) %>% format("%B %Y")
+final_reach_500 <- reach_500 %>% filter(row_number() == 2) %>% pull(index) %>% format("%B %Y")
+
+co2_2100 <- updated_arima_forecasts2100 %>% 
+  filter(year(index) == 2100) %>% 
+  slice(1)
+
+value_2100 <- co2_2100 %>% pull(value) %>% unlist() %>% round(1)
+mean_2100 <- value_2100[1]
+sd_2100 <- value_2100[2]
+
+alpha <- 0.05
+ci_2100 <- round(mean_2100 + qnorm(p = c(alpha/2, 1-alpha/2)) * sd_2100, 1)
+```
+
+Additionally, we used our model to produce a longer term forecast of atmospheric CO\textsubscript{2} concentration levels. \autoref{fig:arima_forecast2100} in the appendix shows this forecast, which extends to 2100. We leveraged this forecast to answer key questions for a longer time horizon. Based on our forecast, CO\textsubscript{2} concentration will reach 420ppm around `r first_reach_420` and remain above that level through `r final_reach_420`, and it will reach 500ppm around `r first_reach_500` and remain above that level through `r final_reach_500`. Both of these are forecasted to persist throughout the time frame after reaching those levels due to the upward trend observed in the series. Finally, we forecast that the CO\textsubscript{2} concentration will be `r mean_2100` at the end of 2100, with a 95% confidence interval of (`r ci_2100[1]`, `r ci_2100[2]`). However, in order for this estimate to be accurate, the trend in atmospheric CO\textsubscript{2} concentration levels would need to remain stable for the next century. Given that this trend is highly impacted by future technological advances and that we have observed a slight deviation in the trend in recent years, it is unlikely to be the same so far into the future. Therefore, we do not have very high confidence in the accuracy of these predictions; however, they can still act as a useful tool to demonstrate what the future could look like if nothing changes in the interim.
+
+# Conclusions 
+
+Should nothing change, expected concentration levels will increase by nearly 45%, corresponding to an approximate ~1ºC increase in global temperatures which can have potentially devastating impacts on natural and agricultural ecosystems. Additionally, higher atmospheric concentrations of CO\textsubscript{2} could potentially result in more health issues related to asphyxiant gas exposure, and elevated rates of anxiety and panic attacks, which would add an unnecessary burden the healthcare system. However, because these values are projected to occur far in the future based on the assumption that current trends continue, there is still time for us to change the direction. Investing in initiatives to reduce atmospheric concentrations of CO\textsubscript{2} today can help us avoid this scenario in the future.
+
+\newpage
+
+\bibliographystyle{aea}
+\bibliography{references}
+
+\newpage
+
+\appendix
+
+```{r time trend report table, include=TRUE}
+gm <- list(
+  list("raw" = "AIC", "clean" = "AIC", "fmt" = round1),
+  list("raw" = "BIC", "clean" = "BIC", "fmt" = round1),
+  list("raw" = "adj_r_squared", "clean" = "Adj. R-squared", "fmt" = round3)
+)
+
+models <- list(Linear = fit_linear, Quadratic = fit_quad, `Quadratic + Seasonal` = fit_quad_season)
+addtl_rows <- data.frame("Residual standard error", lapply(models, resid.func))
+
+modelsummary(models,
+             coef_rename = c("Intercept", "Trend", "Trend^2", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6", "Month 7", "Month 8", "Month 9", "Month 10", "Month 11", "Month 12"), 
+             estimate = "{estimate}{stars}",
+             fmt = round2,
+             gof_map = gm,
+             add_rows = addtl_rows,
+             output = "latex"
+)
+```
+
+\newpage
+
+\section{Appendix: Supplemental ARIMA model plots}
+
+\begin{figure}
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/base_arima_resid_time_series.pdf}
+  \caption{Time series of initial ARIMA model residuals.\label{fig:base_arima_resid_time_series}}
+  \begin{figurenotes}
+    The variance of the residuals is not constant over time, indicating non-stationarity.
+  \end{figurenotes}
+\end{figure}
+
+
+\begin{figure}
+  \noindent\includegraphics[keepaspectratio, height=6cm]{./figures97/updated_arima_forecasts2100.pdf}
+  \caption{Forecasts through 2100.\label{fig:arima_forecast2100}}
+  \begin{figurenotes}
+    The variance of the forecasts becomes extremely large over time, decreasing confidence in our estimates that are far in the future.
+  \end{figurenotes}
+\end{figure}
+
+\section{Appendix: Time Trend Model Robustness}

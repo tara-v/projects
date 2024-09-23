@@ -1,0 +1,264 @@
+---
+title: "Global CO\textsubscript{2} Emissions in 2024"
+short: "What Keeling missed all these years"
+journal: "AER" # AER, AEJ, PP, JEL
+month: "`r format(Sys.Date(), '%m')`"
+year: "`r format(Sys.Date(), '%Y')`"
+author:
+  - name: James Venter
+    firstname: James
+    surname: Venter
+    email: james.venter@ischool.berkeley.edu
+    affiliation: MIDS
+  - name: Ryan Brown
+    firstname: Ryan
+    surname: Brown
+    email: rbrown55@ischool.berkeley.edu
+    affiliation: MIDS
+  - name: Tara Verma
+    firstname: Tara
+    surname: Verma
+    email: tara@ischool.berkeley.edu
+    affiliation: MIDS
+  - name: Zachary Nash
+    firstname: Zachary
+    surname: Nash
+    email: zachary.nash@ischool.berkeley.edu
+    affiliation: MIDS
+header-includes: 
+  - '\usepackage{graphicx}'
+  - '\usepackage{booktabs}'
+  - '\usepackage{subcaption}'
+  - '\usepackage[margin=0.5in]{geometry}'
+  - '\usepackage{float}'
+output: 
+  rticles::aea_article:
+    citation_package: "natbib"
+    keep_tex: False
+biblio-style: aea
+bibliography: vignette.bib
+---
+
+
+```{r setup, include=F}
+rm(list = ls())
+if(!"fable"%in%rownames(installed.packages())) {install.packages("fable")}
+library(fable)
+
+if(!"feasts"%in%rownames(installed.packages())) {install.packages("feasts")}
+library(feasts)
+
+if(!"forecast"%in%rownames(installed.packages())) {install.packages("forecast")}
+library(forecast)
+
+if(!"tsibble"%in%rownames(installed.packages())) {install.packages("tsibble")}
+library(tsibble)
+
+if(!"tidyverse"%in%rownames(installed.packages())) {install.packages("tidyverse")}
+library(tidyverse)
+
+if(!"dplyr"%in%rownames(installed.packages())) {install.packages("dplyr")}
+library(dplyr)
+
+if(!"ggplot2"%in%rownames(installed.packages())) {install.packages("ggplot2")}
+library(ggplot2)
+
+if(!"ggrepel"%in%rownames(installed.packages())) {install.packages("ggrepel")}
+library(ggrepel)
+
+if(!"modelsummary"%in%rownames(installed.packages())) {install.packages("modelsummary")}
+library(modelsummary)
+
+if(!"patchwork"%in%rownames(installed.packages())) {install.packages("patchwork")}
+library(patchwork)
+
+if(!"latex2exp"%in%rownames(installed.packages())) {install.packages("latex2exp")}
+library(latex2exp)
+
+theme_set(theme_minimal())
+knitr::opts_chunk$set(dpi=200, include = F, echo = F, message = F, warning = F)
+
+source("Functions.R")
+source("Constants.R")
+source("Pipeline.R")
+```
+
+# Introduction 
+
+
+
+# Data Pipeline and Present Day Trends in Atmospheric Carbon
+
+```{r data pipeline}
+url <- 'https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.csv'
+co2_present <- pull_data(url, agg_monthly = F, lag_num=52, smooth_terms = c(6, 6))
+co2_tsib <- as_tsibble(co2) %>%
+  mutate(diff = difference(value), diff_perc = (diff / lag(value, 1)) * 100)
+```
+
+
+```{r initial plot}
+base.aes <- list(x = 'index', y = 'value')
+x.value.aes <- list(x = 'value')
+diff.aes <- list(x = 'index', y = 'diff')
+diff.x.value.aes <- list(x = 'diff')
+
+labs.template <- create.labels.template(x.fmt=mo_yr, y.fmt=co2_ppm)
+
+labs.updates <- list(subtitle = 'The "Keeling Curve"')
+gg.labs <- update.template(labs.template, labs.updates)
+inputs.list <- list(aes.params = line.aes.params)
+keeling.curve <- create.plot(co2_present, base.aes, 'line', gg.labs, inputs.list)
+
+labs.updates <- list(y = "# months", x = co2_ppm)
+gg.labs <- update.template(labs.template, labs.updates)
+inputs.list <- list(aes.params = hist.aes.params, stat.params = list(binwidth = 5))
+co2.histogram <- create.plot(co2_present, x.value.aes, 'hist', gg.labs, inputs.list)
+
+pdf("./figures24/co2_time_series.pdf")
+keeling.curve
+dev.off()
+
+pdf("./figures24/co2_histogram.pdf")
+co2.histogram
+dev.off()
+
+seasonal.plot <- co2_present %>%
+          gg_season(value, labels = 'right', labels_repel = TRUE) +
+            labs(
+            title = TeX(r'($CO_2$ Concentration Seasonality)'),
+            x = '',
+            y = TeX(r'($CO_2$ parts per million)')) + base.theme
+
+pdf("./figures24/co2_seasonal.pdf")
+seasonal.plot
+dev.off()
+```
+
+```{r yearly difference plots}
+co2_present_yearly <- co2_present %>% 
+    index_by(yr = ~ year(.)) %>% 
+    summarise(diff = mean(diff, na.rm = T)) %>% 
+    filter(is.na(diff) == F) %>% 
+    rename(index = yr)
+
+labs.updates <- list(title = yearly_mean_co2_diff, x = '')
+gg.labs <- update.template(labs.template, labs.updates)
+inputs.list <- list(aes.params = line.aes.params)
+yearly.co2.diff.plot <- create.plot(co2_present_yearly, diff.aes, 'line', gg.labs, inputs.list)
+
+pdf("./figures24/yearly_diff.pdf")
+yearly.co2.diff.plot + labs(title = '')
+dev.off()
+```
+
+
+\autoref{fig:seasonality} contains the monthly average CO\textsubscript{2} levels by year. The series has continued it's persistent upward trend and it appears that the yearly change has increased as well, with the mean increasing from approximately 360ppm in 1997 to 420ppm in 2024. The seasonality has remained consistent as well as CO\textsubscript{2} levels continue to peak between April and June and hit their lowest point between September and November. Notably, we observe in \autoref{fig:yearly_diff} that the percentage increase of yearly average CO\textsubscript{2} levels has increased substantially since 1997 and it is continuing to grow each year.
+
+\begin{figure}
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{./figures24/co2_seasonal.pdf}
+  \caption{Seasonality and trend in CO\textsubscript{2}}
+  \label{fig:seasonality}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{./figures24/yearly_diff.pdf}
+  \caption{Percent increase in yearly avg. CO\textsubscript{2}}
+  \label{fig:yearly_diff}
+\end{subfigure}
+\caption{Seasonality and yearly percentage change}
+\begin{figurenotes}
+CO\textsubscript{2} levels peak between Apr.-Jun. and bottoms out between Sep.-Nov. each year. The percentage increase in average yearly CO\textsubscript{2} levels is relatively stable.
+\end{figurenotes}
+\label{fig:initial_plots}
+\end{figure}
+
+# Evaluating 1997 Model Forecasts
+
+## Linear Time Trend Model
+
+```{r prior linear model comparison}
+prior_linear_fit <- co2_tsib %>%
+                    model(trend_model = TSLM(value ~ trend() + I(trend()^2) + season()))
+
+latest_month <- co2_tsib %>% pull(index) %>% max()
+num_preds <- make_yearmonth(2020,12) - latest_month
+pred <- new_data(co2_tsib, n=num_preds)
+
+co2_tsib_1990 <- co2_tsib %>% filter(year(index)>=1990)
+co2_present_1990 <- co2_present %>% agg_monthly() %>% filter(year(index)>=1990)
+
+linear_comparison <- prior_linear_fit %>%
+  forecast(new_data = pred) %>%
+  autoplot(co2_tsib_1990) +
+    autolayer(co2_present_1990) +
+    geom_hline(yintercept = 420, color = "blue", linetype="dashed") +
+    annotate("text", x=as.Date("2005-01-01"), y=425, label="420 ppm", size=3, color="blue") + 
+    base.theme +
+    labs(y = co2_ppm, x = '')
+
+
+pdf("./figures24/prior_linear_forecasts.pdf")
+linear_comparison + labs(title = '')
+dev.off()
+```
+
+The linear time trend model appears to have quite accurately forecasted the actual CO\textsubscript{2} concentration, as seen in \autoref{fig:prior_linear_forecasts} where the lines are nearly on top of each other. This is likely due to it's ability to model the quadratic growth in the trend noted above. In the first years of the forecast, through the early 2010s, the model slightly over predicted CO\textsubscript{2} especially in the peak months. Around the mid 2010s it began to slightly under forecast the value, especially in the low point months, likely indicating that the trend is continuing to grow.
+
+\begin{figure}
+  \noindent\includegraphics[keepaspectratio, height=10cm]{./figures24/prior_linear_forecasts.pdf}
+  \caption{1997 Linear Trend Forecast Comparison\label{fig:prior_linear_forecasts}}
+  \begin{figurenotes}
+    The 1997 linear time trend model closely predicted the actual CO\textsubscript{2} concentration due to it's ability to model the quadratic growth in the trend.
+  \end{figurenotes}
+\end{figure}
+
+
+## ARIMA Model
+
+```{r prior arima model comparison}
+prior_arima_fit <- co2_tsib %>%
+  model(ts_model=fable::ARIMA(value~0+pdq(0,1,3)+PDQ(0,1,1),ic="aicc",greedy=F,stepwise=F))
+
+arima_comparison <- prior_arima_fit %>%
+  forecast(new_data = pred) %>%
+  autoplot(co2_tsib_1990) +
+    autolayer(co2_present_1990) +
+    geom_hline(yintercept = 420, color = "blue", linetype="dashed") +
+    annotate("text", x=as.Date("2005-01-01"), y=425, label="420 ppm", size=3, color="blue") + 
+    base.theme +
+    labs(y = co2_ppm, x = '')
+arima_comparison
+
+pdf("./figures24/prior_arima_forecasts.pdf")
+arima_comparison + labs(title = '')
+dev.off()
+```
+
+\begin{figure}
+  \noindent\includegraphics[keepaspectratio, height=10cm]{./figures24/prior_arima_forecasts.pdf}
+  \caption{1997 ARIMA Forecast Comparison\label{fig:prior_arima_forecasts}}
+  \begin{figurenotes}
+    The 1997 ARIMA model 
+  \end{figurenotes}
+\end{figure}
+
+# Present Data ARIMA Models and Forecasts
+
+
+# Conclusions 
+
+
+\newpage
+
+\bibliographystyle{aea}
+\bibliography{references}
+
+\newpage
+
+\appendix
+
+\section{Appendix}
+
