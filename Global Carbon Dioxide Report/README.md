@@ -1,0 +1,3 @@
+# Global Carbon Dioxide Levels - Time Series Analysis
+
+This project, completed as part of DATASCI-271: Analysis of Discrete Response, Time Series, and Panel Data in collaboration with Zach Nash, Ryan Brown, and James Venter, contains two parts. The first is from the perspective of climate scientists in 1997, and the second is a modern-day follow up analyzing global trends in atmospheric carbon dioxide using time series methods.
